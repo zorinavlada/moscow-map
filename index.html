@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Слепая зона — Карта московских маньяков</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0A0A0A;
+      color: #F5F5F5;
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* Шумовая текстура */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.03;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #1a1a1a;
+    }
+
+    .logo {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .stats {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .stats span {
+      color: #DC2626;
+    }
+
+    .map-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      position: relative;
+    }
+
+    #map {
+      max-width: 100%;
+      max-height: 100%;
+      cursor: grab;
+    }
+
+    #map:active {
+      cursor: grabbing;
+    }
+
+    /* Маркеры */
+    .marker {
+      fill: #DC2626;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .marker:hover {
+      fill: #EF4444;
+      filter: drop-shadow(0 0 8px rgba(220, 38, 38, 0.6));
+    }
+
+    /* Карточка */
+    .card {
+      position: fixed;
+      background: rgba(15, 15, 15, 0.95);
+      border: 1px solid #222;
+      border-top: 2px solid #DC2626;
+      padding: 20px;
+      width: 280px;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+
+    .card.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .card-address {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+
+    .card-name {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .card-nickname {
+      font-size: 13px;
+      color: #DC2626;
+      margin-bottom: 12px;
+    }
+
+    .card-meta {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 12px;
+    }
+
+    .card-description {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #aaa;
+    }
+
+    footer {
+      padding: 15px 40px;
+      border-top: 1px solid #1a1a1a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+    }
+
+    .controls button {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #888;
+      width: 32px;
+      height: 32px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+
+    .controls button:hover {
+      background: #222;
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">Слепая зона</div>
+      <div class="stats">
+        <span>20</span> маньяков · <span>250+</span> жертв · 1921–2014
+      </div>
+    </header>
+
+    <div class="map-container">
+      <div id="map"></div>
+    </div>
+
+    <footer>
+      <div class="controls">
+        <button id="zoom-out">−</button>
+        <button id="zoom-in">+</button>
+      </div>
+      <div>Наведите на точку для информации</div>
+    </footer>
+  </div>
+
+  <!-- Карточка -->
+  <div class="card" id="card">
+    <div class="card-address" id="card-address"></div>
+    <div class="card-name" id="card-name"></div>
+    <div class="card-nickname" id="card-nickname"></div>
+    <div class="card-meta" id="card-meta"></div>
+    <div class="card-description" id="card-description"></div>
+  </div>
+
+  <!-- Panzoom библиотека -->
+  <script src="https://unpkg.com/panzoom@9.4.0/dist/panzoom.min.js"></script>
+
+  <script>
+    // Данные о маньяках
+    const maniacs = [
+      {
+        id: 1,
+        name: "Василий Комаров",
+        nickname: "Шаболовский душегуб",
+        years: "1921–1923",
+        victims: 33,
+        address: "Шаболовка, 26",
+        district: "Замоскворечье",
+        coords: [37.6083, 55.7167],
+        description: "Извозчик. Тела прятал в развалинах соседних кварталов."
+      },
+      {
+        id: 2,
+        name: "Владимир Ионесян",
+        nickname: "Мосгаз",
+        years: "1963",
+        victims: 4,
+        address: "Марьина роща, 2-я Мещанская",
+        district: "Марьина роща",
+        coords: [37.6156, 55.7928],
+        description: "Представлялся сотрудником Мосгаза. Последняя жертва — соседка."
+      },
+      {
+        id: 3,
+        name: "Сергей Головкин",
+        nickname: "Фишер",
+        years: "1984–1992",
+        victims: 11,
+        address: "Одинцово, Горки-10",
+        district: "Одинцовский район",
+        coords: [37.2774, 55.7294],
+        description: "Гараж-пыточная в 500 м от дачи Ельцина."
+      },
+      {
+        id: 4,
+        name: "Александр Пичушкин",
+        nickname: "Битцевский маньяк",
+        years: "1992–2006",
+        victims: 49,
+        address: "Зюзино, Херсонская ул.",
+        district: "Зюзино",
+        coords: [37.5756, 55.6531],
+        description: "Жил на краю Битцевского леса. Мечтал убить 64 человека — как клеток на шахматной доске."
+      },
+      {
+        id: 5,
+        name: "Сергей Ряховский",
+        nickname: "Балашихинский потрошитель",
+        years: "1988–1993",
+        victims: 19,
+        address: "Балашиха, Салтыковка",
+        district: "Балашиха",
+        coords: [37.9378, 55.7961],
+        description: "Родился и убивал в одном районе."
+      },
+      {
+        id: 6,
+        name: "Олег Кузнецов",
+        nickname: "Лжедмитрий",
+        years: "1991–1992",
+        victims: 10,
+        address: "Балашиха → Измайлово",
+        district: "Измайлово",
+        coords: [37.8003, 55.7887],
+        description: "Убил 4 в Киеве, вернулся — ещё 5 в Измайловском парке."
+      },
+      {
+        id: 7,
+        name: "Андрей Евсеев",
+        nickname: "Таганский маньяк",
+        years: "1974–1977",
+        victims: 9,
+        address: "Таганский район",
+        district: "Таганский",
+        coords: [37.6597, 55.7392],
+        description: "3 нападения за 55 минут на Таганской площади."
+      },
+      {
+        id: 8,
+        name: "Владимир Белов",
+        nickname: "Ховринский маньяк",
+        years: "конец 1990-х",
+        victims: 6,
+        address: "Ховрино",
+        district: "Ховрино",
+        coords: [37.4883, 55.8669],
+        description: "100+ нападений в районе, где жил."
+      },
+      {
+        id: 9,
+        name: "Юрий Раевский",
+        nickname: "Внуковский маньяк",
+        years: "1971",
+        victims: 4,
+        address: "Внуково, м. Динамо",
+        district: "Внуково",
+        coords: [37.2911, 55.6017],
+        description: "Дарил жертвам синие розы."
+      },
+      {
+        id: 10,
+        name: "Валерий Асратян",
+        nickname: "Режиссёр",
+        years: "1988–1990",
+        victims: 2,
+        address: "Центр, у Детского мира",
+        district: "Центр",
+        coords: [37.6247, 55.7608],
+        description: "Представлялся кинорежиссёром. Искал жертв у Детского мира."
+      },
+      {
+        id: 11,
+        name: "Владимир Миргород",
+        nickname: "Душитель",
+        years: "2002–2004",
+        victims: 16,
+        address: "Север Москвы",
+        district: "САО",
+        coords: [37.5308, 55.8378],
+        description: "Душил женщин в северных районах столицы."
+      },
+      {
+        id: 12,
+        name: "Сергей Седов",
+        nickname: "Сокольнический маньяк",
+        years: "1998–1999",
+        victims: 6,
+        address: "Сокольники",
+        district: "Сокольники",
+        coords: [37.6789, 55.7897],
+        description: "Убивал в парке у дома."
+      },
+      {
+        id: 13,
+        name: "Мария Петрова",
+        nickname: "Зюзинская маньячка",
+        years: "2002",
+        victims: 2,
+        address: "Зюзино",
+        district: "Зюзино",
+        coords: [37.5656, 55.6631],
+        description: "Учитель физкультуры. Резала горло мужчинам."
+      },
+      {
+        id: 14,
+        name: "Валерий Макаренков",
+        nickname: "Кузьминский душитель",
+        years: "1987–2014",
+        victims: "90+",
+        address: "Кузьминки",
+        district: "Кузьминки",
+        coords: [37.7656, 55.6978],
+        description: "27 лет насиловал женщин в парке на велосипеде."
+      },
+      {
+        id: 15,
+        name: "Братья Сидоровы",
+        nickname: "Уличные маньяки",
+        years: "2013",
+        victims: 6,
+        address: "Орехово-Борисово",
+        district: "Орехово-Борисово",
+        coords: [37.7247, 55.6108],
+        description: "Выбирали жертв из толпы у дома."
+      },
+      {
+        id: 16,
+        name: "Борис Гусаков",
+        nickname: "",
+        years: "1963–1968",
+        victims: 6,
+        address: "Салтыковка",
+        district: "Балашиха",
+        coords: [37.9478, 55.7561],
+        description: "Родился и убивал в Салтыковке."
+      },
+      {
+        id: 17,
+        name: "Виктор Малюк",
+        nickname: "Убийца по объявлениям",
+        years: "2000–2001",
+        victims: 4,
+        address: "Стартовая улица",
+        district: "САО",
+        coords: [37.5608, 55.8178],
+        description: "Выманивал жертв по объявлениям о продаже."
+      },
+      {
+        id: 18,
+        name: "Алексей Малаев",
+        nickname: "Измайловский маньяк",
+        years: "2007",
+        victims: 1,
+        address: "Парковые улицы",
+        district: "Измайлово",
+        coords: [37.7903, 55.7987],
+        description: "Жил и грабил на одной улице."
+      },
+      {
+        id: 19,
+        name: "Владимир Кузьмин",
+        nickname: "Царицынский маньяк",
+        years: "1990-е",
+        victims: 3,
+        address: "Борисовские Пруды",
+        district: "Царицыно",
+        coords: [37.7547, 55.6308],
+        description: "Охотился у местного интерната."
+      },
+      {
+        id: 20,
+        name: "Анатолий Нагиев",
+        nickname: "Охотник за Пугачёвой",
+        years: "1979–1981",
+        victims: 7,
+        address: "Курская обл. → Москва",
+        district: "Центр",
+        coords: [37.6147, 55.7508],
+        description: "Выслеживал Пугачёву. Убивал похожих на неё женщин."
+      }
+    ];
+
+    // Загружаем SVG
+    async function loadMap() {
+      const response = await fetch('moscow.svg');
+      const svgText = await response.text();
+
+      const mapContainer = document.getElementById('map');
+      mapContainer.innerHTML = svgText;
+
+      const svg = mapContainer.querySelector('svg');
+
+      // Добавляем маркеры
+      addMarkers(svg);
+
+      // Инициализируем pan/zoom
+      const pz = panzoom(svg, {
+        maxZoom: 5,
+        minZoom: 0.5,
+        initialZoom: 1,
+        bounds: true,
+        boundsPadding: 0.1
+      });
+
+      // Кнопки зума
+      document.getElementById('zoom-in').addEventListener('click', () => pz.zoomIn());
+      document.getElementById('zoom-out').addEventListener('click', () => pz.zoomOut());
+    }
+
+    function addMarkers(svg) {
+      const markersGroup = svg.querySelector('#markers');
+      const viewBox = svg.viewBox.baseVal;
+
+      // Границы карты (из данных)
+      const bounds = {
+        minLon: 36.8031,
+        maxLon: 37.9708,
+        minLat: 55.1422,
+        maxLat: 56.0212
+      };
+
+      maniacs.forEach(m => {
+        const x = ((m.coords[0] - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * viewBox.width;
+        const y = ((bounds.maxLat - m.coords[1]) / (bounds.maxLat - bounds.minLat)) * viewBox.height;
+
+        // Размер точки зависит от количества жертв
+        const victims = typeof m.victims === 'number' ? m.victims : 10;
+        const radius = Math.max(4, Math.min(12, 3 + victims / 5));
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', x);
+        circle.setAttribute('cy', y);
+        circle.setAttribute('r', radius);
+        circle.setAttribute('class', 'marker');
+        circle.setAttribute('data-id', m.id);
+
+        // События
+        circle.addEventListener('mouseenter', (e) => showCard(m, e));
+        circle.addEventListener('mouseleave', hideCard);
+
+        markersGroup.appendChild(circle);
+      });
+    }
+
+    function showCard(maniac, event) {
+      const card = document.getElementById('card');
+
+      document.getElementById('card-address').textContent = maniac.address;
+      document.getElementById('card-name').textContent = maniac.name;
+      document.getElementById('card-nickname').textContent = maniac.nickname ? `«${maniac.nickname}»` : '';
+      document.getElementById('card-meta').textContent = `${maniac.years} · ${maniac.victims} жертв`;
+      document.getElementById('card-description').textContent = maniac.description;
+
+      // Позиционирование
+      const rect = event.target.getBoundingClientRect();
+      let left = rect.right + 15;
+      let top = rect.top - 20;
+
+      // Если не помещается справа — слева
+      if (left + 280 > window.innerWidth) {
+        left = rect.left - 295;
+      }
+
+      // Если не помещается снизу — поднимаем
+      if (top + 200 > window.innerHeight) {
+        top = window.innerHeight - 220;
+      }
+
+      card.style.left = left + 'px';
+      card.style.top = top + 'px';
+      card.classList.add('visible');
+    }
+
+    function hideCard() {
+      document.getElementById('card').classList.remove('visible');
+    }
+
+    // Запуск
+    loadMap();
+  </script>
+</body>
+</html>
