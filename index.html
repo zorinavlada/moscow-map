@@ -165,16 +165,56 @@
       background: #1a1a1a;
       border: 1px solid #333;
       color: #888;
-      width: 32px;
-      height: 32px;
+      width: 44px;
+      height: 44px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 20px;
       transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
 
-    .controls button:hover {
+    .controls button:hover,
+    .controls button:active {
       background: #222;
       color: #fff;
+    }
+
+    /* Мобильная адаптация */
+    @media (max-width: 768px) {
+      header {
+        padding: 15px 20px;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .logo {
+        font-size: 12px;
+      }
+
+      .stats {
+        font-size: 11px;
+      }
+
+      footer {
+        padding: 10px 20px;
+      }
+
+      .controls button {
+        width: 48px;
+        height: 48px;
+        font-size: 24px;
+      }
+
+      .card {
+        width: 260px;
+        padding: 15px;
+        max-width: 80vw;
+      }
+
+      .marker {
+        cursor: pointer;
+      }
     }
   </style>
 </head>
@@ -491,9 +531,18 @@
         circle.setAttribute('class', 'marker');
         circle.setAttribute('data-id', m.id);
 
-        // События
+        // События — десктоп
         circle.addEventListener('mouseenter', (e) => showCard(m, e));
         circle.addEventListener('mouseleave', hideCard);
+
+        // События — мобильные (тап)
+        circle.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showCard(m, e);
+        });
+        circle.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+        }, { passive: true });
 
         markersGroup.appendChild(circle);
       });
@@ -531,6 +580,13 @@
     function hideCard() {
       document.getElementById('card').classList.remove('visible');
     }
+
+    // Закрыть карточку при клике вне маркера (для мобильных)
+    document.addEventListener('click', (e) => {
+      if (!e.target.classList.contains('marker')) {
+        hideCard();
+      }
+    });
 
     // Запуск
     loadMap();
