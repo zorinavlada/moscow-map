@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { Maniac } from "@/lib/maniacs";
 import { maniacs } from "@/lib/maniacs";
-import type panzoomType from "panzoom";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type PanzoomInstance = { dispose: () => void; zoomIn: () => void; zoomOut: () => void };
 
 const BOUNDS = {
   minLon: 36.8031,
@@ -18,7 +19,7 @@ const SVG_HEIGHT = 1000;
 export default function MoscowMap() {
   const mapRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
-  const pzRef = useRef<ReturnType<typeof panzoomType> | null>(null);
+  const pzRef = useRef<PanzoomInstance | null>(null);
   const [activeManiac, setActiveManiac] = useState<Maniac | null>(null);
   const [cardPos, setCardPos] = useState({ left: 0, top: 0 });
 
@@ -76,7 +77,7 @@ export default function MoscowMap() {
 
         // Init panzoom
         import("panzoom").then((mod) => {
-          const panzoom = mod.default;
+          const panzoom = mod.default || mod;
           const pz = panzoom(svg, {
             maxZoom: 5,
             minZoom: 0.5,
@@ -85,6 +86,8 @@ export default function MoscowMap() {
             boundsPadding: 0.1,
           });
           pzRef.current = pz;
+        }).catch((err) => {
+          console.log("[v0] panzoom load error:", err);
         });
       });
 
