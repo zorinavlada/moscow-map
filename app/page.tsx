@@ -1,14 +1,5 @@
+import MoscowMap from "@/components/moscow-map";
+
 export default function Page() {
-  return (
-    <iframe
-      src="/map.html"
-      style={{
-        width: "100vw",
-        height: "100vh",
-        border: "none",
-        display: "block",
-      }}
-      title="Слепая зона — Карта московских маньяков"
-    />
-  );
+  return <MoscowMap />;
 }
