@@ -98,7 +98,8 @@
     .marker-label {
       font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
       font-weight: 600;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
       fill: #DC2626;
       stroke: #0A0A0A;
       stroke-width: 2.5px;
@@ -310,7 +311,7 @@
     <header>
       <div class="logo">Слепая зона</div>
       <div class="stats">
-        <span>20</span> маньяков · <span>220+</span> жертв · 1921–2013
+        <span>25</span> маньяков · <span>265+</span> жертв · 1921–2013
       </div>
     </header>
 
@@ -20123,7 +20124,7 @@
       <div class="legend">
         <span class="legend-item"><span class="legend-dot"></span> Размер точки = количество жертв</span>
         <span class="legend-divider">·</span>
-        <span class="legend-item">Наведите на точку для подробностей</span>
+        <span class="legend-item">Наведите на точку или имя для подробностей</span>
       </div>
     </footer>
   </div>
@@ -20592,6 +20593,14 @@
         }
         label.textContent = m.name;
 
+        // Hover/click на подпись — показывает карточку
+        label.addEventListener('mouseenter', (e) => showCard(m, e));
+        label.addEventListener('mouseleave', hideCard);
+        label.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showCard(m, e);
+        });
+
         markersGroup.appendChild(label);
       });
     }
@@ -20648,7 +20657,7 @@
 
     // Закрыть карточку при клике вне маркера (для мобильных)
     document.addEventListener('click', (e) => {
-      if (!e.target.classList.contains('marker')) {
+      if (!e.target.classList.contains('marker') && !e.target.classList.contains('marker-label')) {
         hideCard();
       }
     });
